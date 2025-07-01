@@ -1,36 +1,54 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-
 import { fetchPosts, addPost, deletePost } from "./postsSlice";
-import PostForm  from "./PostForm";
-import PostCard  from "./PostCard";
+import PostForm from "./PostForm";
+import PostCard from "./PostCard";
+import PostModal from "../../components/PostModal";
 
 export default function PostList() {
   const dispatch = useDispatch();
-  const { list, status } = useSelector((state) => state.posts);
+  const { list, status } = useSelector((s) => s.posts);
+  const [selected, setSelected] = useState(null);
 
-  /* Sayfa açıldığında verileri getir */
   useEffect(() => {
     dispatch(fetchPosts());
   }, [dispatch]);
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl mb-4">Posts</h1>
+    <div
+      style={{
+        maxWidth: "1000px",          // Sayfa ortalama genişliği
+        margin: "0 auto",            // Ortalar
+        padding: "24px 16px",
+      }}
+    >
+      <h1 style={{ fontSize: "32px", marginBottom: "24px" }}>Posts</h1>
 
-      {/* Yeni post formu */}
-      <PostForm onSubmit={(data) => dispatch(addPost(data))} />
+      {/* Form */}
+      <PostForm onSubmit={(d) => dispatch(addPost(d))} />
+
+      {/* Modal */}
+      <PostModal post={selected} onClose={() => setSelected(null)} />
 
       {status === "loading" && <p>Yükleniyor…</p>}
-      {status === "failed"  && <p className="text-red-500">Hata!</p>}
+      {status === "failed" && <p style={{ color: "red" }}>Hata!</p>}
 
-      {/* Post kartları */}
-      <div className="mt-6 grid gap-4 grid-cols-1 sm:grid-cols-2">
+      {/* Kart gridi */}
+      <div
+        style={{
+          marginTop: "32px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "16px",
+          justifyContent: "center",   // ortala
+        }}
+      >
         {list.map((p) => (
           <PostCard
             key={p.id}
             post={p}
             onDelete={(id) => dispatch(deletePost(id))}
+            onOpen={(p) => setSelected(p)}
           />
         ))}
       </div>

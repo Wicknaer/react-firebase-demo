@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { db, storage } from "../../lib/firebase";
-
 import {
   collection,
   addDoc,
@@ -11,7 +10,6 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
-
 import {
   ref,
   uploadBytes,
@@ -22,35 +20,52 @@ const postsRef = collection(db, "posts");
 
 /* ---------- THUNKS ---------- */
 
-// Hepsini çek
+// Tüm postları çek
 export const fetchPosts = createAsyncThunk("posts/fetch", async () => {
   const q = query(postsRef, orderBy("createdAt", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      title: data.title,
+      description: data.description,
+      image: data.image,
+      createdAt: data.createdAt?.toMillis?.() ?? Date.now(),
+    };
+  });
 });
 
-// Yeni post
+// Yeni post ekle
 export const addPost = createAsyncThunk(
   "posts/add",
-  async ({ title, file }, { rejectWithValue }) => {
+  async ({ title, description, file }, { rejectWithValue }) => {
     try {
-      // 🔄 dosya adı üret (UUID desteklenmezse Date.now)
+      // Benzersiz dosya adı
       const name =
         (crypto?.randomUUID?.() ?? Date.now()) + "-" + file.name;
 
-      // 1) Storage'a yükle
+      // 1) Görseli Storage'a yükle
       const fileRef = ref(storage, `posts/${name}`);
       await uploadBytes(fileRef, file);
       const url = await getDownloadURL(fileRef);
 
-      // 2) Firestore'a yaz
+      // 2) Firestore'a doküman ekle
       const docRef = await addDoc(postsRef, {
         title,
+        description,
         image: url,
         createdAt: serverTimestamp(),
       });
 
-      return { id: docRef.id, title, image: url };
+      return {
+        id: docRef.id,
+        title,
+        description,
+        image: url,
+        createdAt: Date.now(), // anında listeye yansıtmak için
+      };
     } catch (e) {
       console.error("addPost error:", e.code);
       return rejectWithValue(e.code);
@@ -58,7 +73,7 @@ export const addPost = createAsyncThunk(
   }
 );
 
-// Sil
+// Post sil
 export const deletePost = createAsyncThunk(
   "posts/delete",
   async (id, { rejectWithValue }) => {
@@ -79,29 +94,29 @@ const postsSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchPosts.fulfilled, (s, a) => {
-        s.list = a.payload;
-        s.status = "succeeded";
+      .addCase(fetchPosts.fulfilled, (state, action) => {
+        state.list = action.payload;
+        state.status = "succeeded";
       })
-      .addCase(addPost.fulfilled, (s, a) => {
-        s.list.unshift(a.payload);
-        s.status = "succeeded";
+      .addCase(addPost.fulfilled, (state, action) => {
+        state.list.unshift(action.payload);
+        state.status = "succeeded";
       })
-      .addCase(deletePost.fulfilled, (s, a) => {
-        s.list = s.list.filter((p) => p.id !== a.payload);
+      .addCase(deletePost.fulfilled, (state, action) => {
+        state.list = state.list.filter((p) => p.id !== action.payload);
       })
       .addMatcher(
-        (a) => a.type.endsWith("/pending"),
-        (s) => {
-          s.status = "loading";
-          s.error = null;
+        (action) => action.type.endsWith("/pending"),
+        (state) => {
+          state.status = "loading";
+          state.error = null;
         }
       )
       .addMatcher(
-        (a) => a.type.endsWith("/rejected"),
-        (s, a) => {
-          s.status = "failed";
-          s.error = a.payload;
+        (action) => action.type.endsWith("/rejected"),
+        (state, action) => {
+          state.status = "failed";
+          state.error = action.payload;
         }
       );
   },
